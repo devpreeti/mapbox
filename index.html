@@ -1,0 +1,370 @@
+    <!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Display a map on a webpage</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no"> <link href="https://api.mapbox.com/mapbox-gl-js/v2.7.0/mapbox-gl.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="./css/bootstrap.min.css"> 
+    <link rel="stylesheet" type="text/css" href="./css/font-awesome.min.css"> 
+    <link rel="stylesheet" type="text/css" href="./fonts/roboto/stylesheet.css"> 
+    <link rel="stylesheet" type="text/css" href="./css/style.css"> 
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.7.0/mapbox-gl.js"></script>
+    <script src="./js/named_areas.js"></script>
+    <script src="./js/live_data.js"></script>
+    <script src="./js/only_coordinates.js"></script>
+
+     <script src='https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.0/jquery-ui.min.js'></script><script  src="./script.js"></script>
+    <script src="./js/bootstrap.min.js"></script>
+    
+
+</head>
+
+<body>
+    <!-- <canvas id="canvasID" width="400" height="400">Canvas not supported</canvas> -->
+    <div id="mySidebar" class="sidebar">
+
+        <div class="contentselct">
+            <div class="slctdata">
+                <div class="slctname">
+                    Heatmap Type
+                </div>
+                <div class="slctOption">
+                    <select onchange="select_density_crowd()" id="select_density_crowd" class="form-control">
+                        <option>Select Option</option>
+                        <option value="density" selected>Density <sup>m2</sup></option>
+                        <option value="crowd">Crowd count</option>
+                    </select>
+                </div>
+            </div>
+            
+           
+            <div class="slctdata">
+                <div>
+                    <b>Heatmap Transparency</b>
+                </div>
+                <div class="mt-2 price-slider">
+                    <input id="slide" type="range" min="0" max="100" step="1" value="50" onchange="updateSlider(this.value)">
+                    <div id="sliderAmount">50</div>
+                </div>
+            </div>
+            <div class="slctdata">
+                <div>
+                    <b>Refresh Rate</b>
+                </div>
+                <div class="mt-2 price-slider">
+                    <input id="slide2" type="range" min="0" max="100" step="1" value="60" onchange="refreshRate(this.value)">
+                    <div id="sliderAmount2">60</div>
+                </div>
+            </div>
+
+            <div class="slctdata selectBgColor bgposition">
+                <div>
+                    <label><b>Background Image</b></label>
+                </div>
+                <div id="menu" class="choicebg">
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <div class="bgborder mb-1">
+                               <label for="dark-v10">
+                                <img src="./images/dark.jpg">
+                               </label>
+                            </div>
+                            <input id="dark-v10" type="radio" name="rtoggle" value="dark">
+                            <label for="dark-v10">dark</label>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class=" mb-1">
+                               <label for="streets-v11">
+                                <img src="./images/streets.jpg">
+                               </label>
+                            </div>
+                            <input id="streets-v11" type="radio" name="rtoggle" value="streets">
+                            <label for="streets-v11">streets</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+       
+
+      
+       
+       
+
+       
+      <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">×</a>      
+    </div>
+
+    <form>
+        <input type="hidden" id="heatmap_type" value="crowd_count">
+        <input type="hidden" id="opacity" value="0.50">
+        <input type="hidden" id="refresh_rate" value="60">
+    </form>
+
+
+
+<div id="main">
+  <button class="openbtn" onclick="openNav()"><i class="fa fa-angle-left" aria-hidden="true"></i></button>  
+ <div id='map'></div>
+</div>
+<script>
+function openNav() {
+  $("#mySidebar").toggleClass("sidebarToggle");
+  $("#main").toggleClass("mainToggle");
+}
+
+// click outside
+$(document).mouseup(function(e){ 
+  var container = $("#mySidebar");
+    if (!container.is(e.target) && container.has(e.target).length === 0) 
+    {
+         $("#mySidebar").removeClass("sidebarToggle")
+         $("#main").removeClass("mainToggle");
+    }
+});
+
+
+function closeNav() {
+    $("#mySidebar").removeClass("sidebarToggle");
+    $("#main").removeClass("mainToggle");
+}
+</script>
+
+    <script>        
+        mapboxgl.accessToken = 'pk.eyJ1IjoicHJlZXRpMDcxMjg5IiwiYSI6ImNsMWJ2NDA0ZzAxaG0zZnAzZTFiNXJ6d3YifQ.SpiYayEbQCWXNM5NUeuCUw';
+        const map = new mapboxgl.Map({
+            container: 'map', // container ID
+            style: 'mapbox://styles/mapbox/dark-v10', // style URL
+            center: [-123.1081091, 49.2745195], // starting position [lng, lat]49.2745195,-123.1081091
+            zoom: 15 // starting zoom
+        });
+        let callJsonResponse;
+        
+        async function fetchJSON() {
+          const response = await fetch('https://uzz2goe1s0.execute-api.us-east-1.amazonaws.com/counts');          
+          const jsonResponseData = await response.json();
+          // console.log('jsonResponseData',jsonResponseData);
+          callJsonResponse = jsonResponseData
+          return jsonResponseData 
+        }
+
+        fetchJSON().then(jsonResponseData => {
+            // console.log('promise response',jsonResponseData);
+                 let filter = 'crowd_count';
+            callMap(jsonResponseData,filter);
+        });
+
+        function callMap(jsonResponseData){
+            
+            map.on('load', () => {
+                setSourceFilters(jsonResponseData.data,'crowd_count');                
+            });
+        }
+
+        function setSourceFilters(liveResponse){//,filter,opacity=1){
+            console.log('Heeeedfree');
+            // alert('Here');
+            // let liveResponse = jsonResponseData.data;                
+            let data11={
+                    'type': 'geojson',
+                    'data': {
+                        'type': 'Feature',
+                        'geometry': {
+                            'type': 'Polygon',
+                            // These coordinates outline Maine.
+                            'coordinates':onlyCoordinates
+                    
+                        }
+                    }
+                }
+            // map.addSource('maine11',data11);
+            // map.addLayer({
+            //     'id': `maine11`,
+            //     'type': 'fill',
+            //     'source': 'maine11', // reference the data source
+            //     'layout': {},
+            //     'paint': {
+            //     'fill-color': 'red', // blue color fill
+            //     'fill-opacity': 0.2,
+            //     }
+            // });
+
+            console.log("called from set interval");
+            let parsedResponse = [];
+            for (const ele of liveResponse) {
+                crowd_count = ele.crowd_count;
+                density_m2 = ele.density_m2;                
+                let areaCode = ele.id;
+                color = "darkred";                    
+                let checkFlag;
+                // console.log( document.getElementById('heatmap_type').value )
+                if(document.getElementById('heatmap_type').value == 'crowd_count'){
+                    checkFlag = crowd_count;    
+                }else if(document.getElementById('heatmap_type').value == 'density_m2'){
+                    checkFlag = density_m2;    
+                }
+                
+                
+                
+                if(checkFlag >= 0 && checkFlag < 10){
+                    color = "darkblue";
+                }else if(checkFlag > 10 && checkFlag < 20){
+                    color = "blue";
+                }else if(checkFlag > 20 && checkFlag < 30){
+                    color = "lightblue";
+                }else if(checkFlag > 30 && checkFlag < 40){
+                    color = "blue";
+                }else if(checkFlag > 40 && checkFlag < 50){
+                    color = "darkgreen";
+                }else if(checkFlag > 50 && checkFlag < 60){
+                    color = "green";
+                }else if(checkFlag > 60 && checkFlag < 70){
+                    color = "lightgreen";
+                }else if(checkFlag > 70 && checkFlag < 80){
+                    color = "darkyellow";
+                }else if(checkFlag > 80 && checkFlag < 90){
+                    color = "yellow";
+                }else if(checkFlag > 90 && checkFlag < 100){
+                    color = "darkred";
+                }                    
+                parsedResponse[areaCode] = { "crowd_count":crowd_count,"density_m2":density_m2,'color':color };                
+            }
+            console.log('parsedResponse',parsedResponse)
+            let i = 0;
+            for (const element of jsonData) {
+                if(parsedResponse[element.name]){
+                    let data1={
+                        'type': 'geojson',
+                        'data': {
+                            'type': 'Feature',
+                            'geometry': {
+                                'type': 'Polygon',
+                                // These coordinates outline Maine.
+                                'coordinates':[element.segments]
+                        
+                            }
+                        }
+                    }
+                
+                    if (map.getLayer(element.name)) {
+                        map.removeLayer(element.name);
+                    }
+                    
+                    if (map.getLayer( `${element.name} ${i}` )) {
+                        map.removeLayer( `${element.name} ${i}` );
+                    }                
+                
+                    if (!map.getSource(element.name)) {
+                        map.addSource(element.name,data1);                
+                    }                
+                    let parsedOpacity = Number(document.getElementById('opacity').value);
+                    map.addLayer({
+                        'id': element.name,
+                        'type': 'fill',
+                        'source': element.name, // reference the data source
+                        'layout': {},
+                        'paint': {
+                            'fill-color': (parsedResponse[element.name].color)?parsedResponse[element.name].color:'pink', // blue color fill
+                            'fill-opacity': parsedOpacity,
+                        }
+                    });
+                
+                    map.addLayer({
+                        'id': `${element.name} ${i}`,
+                        'type': 'line',
+                        'source': element.name,
+                        'layout': {},
+                        'paint': {
+                            'line-color': 'lightblue',
+                            'line-width': 1
+                        }
+                    });                                    
+                    i++;
+                }                
+            }
+        }
+
+        function resetFilterDensity(){     
+            document.getElementById('heatmap_type').value = "density_m2";
+            setSourceFilters(callJsonResponse.data);//,'density_m2');    
+            return;            
+        }     
+
+        function resetFilterCrowd(){            
+            document.getElementById('heatmap_type').value = "crowd_count";
+            setSourceFilters(callJsonResponse.data);//,'crowd_count');    
+            return;            
+        }
+
+        function resetOpacity(){            
+            document.getElementById('opacity').value = 0.3;
+            setSourceFilters(callJsonResponse.data);//,'crowd_count',0.3);    
+            return;            
+        }        
+        function select_refresh_rate(){
+            setInterval( async() =>{            
+                  const response = await fetch('https://uzz2goe1s0.execute-api.us-east-1.amazonaws.com/counts');          
+                  const jsonResponseData = await response.json();
+                  console.log('setIntervalRespone',jsonResponseData);
+                  // callJsonResponse = jsonResponseData              
+                  setSourceFilters(callJsonResponse.data);            
+                
+            },document.getElementById('select_refresh_rate').value * 1000)    
+        }
+        
+
+        const layerList = document.getElementById('menu');
+        const inputs = layerList.getElementsByTagName('input');
+ 
+        for (const input of inputs) {
+            input.onclick = (layer) => {
+            const layerId = layer.target.id;
+            map.setStyle('mapbox://styles/mapbox/' + layerId);
+            setSourceFilters(callJsonResponse.data);
+            };
+        }
+
+    </script>
+
+    <script>
+    function updateSlider(slideAmount) {
+        var sliderDiv = document.getElementById("sliderAmount");
+        sliderDiv.innerHTML = slideAmount;
+        document.getElementById('opacity').value = 1 - (slideAmount/100);
+        setSourceFilters(callJsonResponse.data);
+    }
+    function refreshRate(rate){
+        var sliderDiv = document.getElementById("sliderAmount2");
+        sliderDiv.innerHTML = rate;
+        document.getElementById('opacity').value = slideAmount/100
+        setSourceFilters(callJsonResponse.data);
+    }
+
+    function select_density_crowd() {
+        let selectedOption = document.getElementById('select_density_crowd').value;
+        if( selectedOption == 'density'){
+            document.getElementById('heatmap_type').value = "density_m2";
+            setSourceFilters(callJsonResponse.data);     
+        }else if( selectedOption == 'crowd'){
+            document.getElementById('heatmap_type').value = "crowd_count";
+            setSourceFilters(callJsonResponse.data);
+        }
+    }
+
+    function change_background() {
+        let selectedOption = document.getElementById('select_density_crowd').value;
+        if( selectedOption == 'density'){
+            document.getElementById('heatmap_type').value = "density_m2";
+            setSourceFilters(callJsonResponse.data);     
+        }else if( selectedOption == 'crowd'){
+            document.getElementById('heatmap_type').value = "crowd_count";
+            setSourceFilters(callJsonResponse.data);
+        }
+    }
+
+    
+</script>
+</body>
+</html>
